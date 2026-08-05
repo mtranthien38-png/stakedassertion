@@ -1,69 +1,125 @@
-# StakedAssertion
+# stakedassertion
 
-**Stake GEN to make assertions.** Submit a claim with evidence URLs and a GEN stake. AI consensus verifies the claim. False claims get slashed.
+Stake GEN to make on-chain assertions. Get slashed if wrong.
 
-Contract `0xdF702B05AbdD4A12B56F0C729b7F0dc48a416fdc` — StudioNet 61999
-
----
-
-## How it works
+## contract
 
 ```
-submit_assertion(text, evidence_urls) + GEN stake
-  ├─ leader: fetch evidence → AI verifies → verdict
-  ├─ validator: fetch independently → AI verifies → must match
-  └─ consensus: verdict + 4 checks → auto-slash if refuted
+0xdF702B05AbdD4A12B56F0C729b7F0dc48a416fdc  (StudioNet 61999)
 ```
 
-## The economics
+## the idea
 
-| Verdict | Slash | Return |
-|---------|-------|--------|
-| CONFIRMED | 0% | 100% of stake |
-| INCONCLUSIVE | 10% | 90% of stake |
-| REFUTED | 50% | 50% of stake |
+Anyone can assert a fact on-chain. But assertions cost GEN.
+If the assertion is **confirmed** by AI consensus → full stake returned.
+If **refuted** → 50% slashed.
+If **inconclusive** → 10% slashed.
 
-Slashed funds go to contract owner. Staker calls `withdraw_stake()` to reclaim remaining.
+This creates economic incentives for truthful assertions.
 
-## Verification checks
+## example flow
 
-| Check | Question |
+```python
+# assert with 1 GEN stake
+aid = submit_assertion(
+    "Bitcoin reached $100k on Dec 5 2024",
+    "https://en.wikipedia.org/wiki/Bitcoin,https://coingecko.com/en/coins/bitcoin",
+    context="Historical price verification"
+)  # value=1000000000000000000
+
+# check result
+is_confirmed(aid)  # → True if evidence supports
+
+# withdraw remaining stake
+withdraw_stake(aid)
+```
+
+## slashing table
+
+| verdict | slash | you get back |
+|---------|-------|-------------|
+| CONFIRMED | 0% | 100% |
+| INCONCLUSIVE | 10% | 90% |
+| REFUTED | 50% | 50% |
+
+Slashed funds go to contract owner via `emit_transfer`.
+
+## consensus
+
+```
+submit_assertion(text, evidence_urls) + GEN
+│
+├─ leader_fn()
+│   └─ fetch all evidence → AI verifies accuracy/evidence/consistency/completeness
+│
+├─ validator_fn()
+│   └─ fetch independently → AI verifies → must match leader
+│
+├─ if REFUTED: auto-slash 50% to owner
+├─ if INCONCLUSIVE: auto-slash 10% to owner
+└─ result stored on-chain
+```
+
+## verification checks
+
+| check | question |
 |-------|----------|
-| Accuracy | Does evidence support the factual claims? |
-| Evidence | Sufficient evidence for a determination? |
-| Consistency | Assertion consistent with evidence? |
-| Completeness | Evidence covers all aspects? |
+| accuracy | evidence supports factual claims? |
+| evidence | sufficient for determination? |
+| consistency | assertion consistent with evidence? |
+| completeness | evidence covers all aspects? |
 
-## Verdicts
+## verdicts
 
-- **CONFIRMED** — evidence supports the assertion
-- **REFUTED** — evidence contradicts the assertion
-- **INCONCLUSIVE** — evidence insufficient or ambiguous
+| verdict | meaning |
+|---------|---------|
+| CONFIRMED | evidence supports assertion |
+| REFUTED | evidence contradicts assertion |
+| INCONCLUSIVE | evidence insufficient |
+
+## validator comparison
+
+```python
+if my["verdict"] != leader["verdict"]:   return False
+if my["checks"] != leader["checks"]:     return False
+return True
+```
+
+Exact match on verdict + all 4 checks. No tolerance.
 
 ## API
 
-Write (payable):
-- `submit_assertion(text, evidence_csv, context)` — must send GEN stake
-- `withdraw_stake(assertion_id)` — reclaim remaining stake
+### write (payable)
 
-View:
-- `get_assertion(id)` / `get_verification(id)` / `get_stake(id)`
-- `is_confirmed(id)` — boolean
-- `get_stats()` / `get_version()`
+| function | params | value | returns |
+|----------|--------|-------|---------|
+| `submit_assertion` | text, evidence_csv, context? | GEN stake | assertion_id |
+| `withdraw_stake` | assertion_id | — | — |
 
-## Validator comparison
+### view
 
-Verdict + all 4 checks must match exactly. No tolerance.
+| function | returns |
+|----------|---------|
+| `get_assertion(id)` | full assertion JSON |
+| `get_verification(id)` | verdict + checks |
+| `get_stake(id)` | staked amount |
+| `is_confirmed(id)` | bool |
+| `get_stats()` | {owner, total_assertions} |
+| `get_version()` | "stakedassertion/1.0.0" |
 
-## Use cases
+## tests
 
-- Fact-checking with economic incentives
-- Dispute resolution with skin in the game
-- Data verification with accountability
-- Oracle attestation with slashing
-
-## Tests
-
+```bash
+python -m pytest tests/ -v
+# 29 passed
 ```
-python -m pytest tests/test_stakedassertion.py -v
-```
+
+## tech
+
+- `gl.vm.run_nondet_unsafe` — leader-validator consensus
+- `gl.nondet.web.get` — on-chain fetch (inside consensus)
+- `gl.nondet.exec_prompt` — AI verification
+- `gl.public.write.payable` — staked submissions
+- `emit_transfer` — slashing payouts
+- `TreeMap[str, str]` + `TreeMap[str, u256]` — storage
+- No `@dataclass`, no `gl.vm.block_number`
