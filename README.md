@@ -110,8 +110,8 @@ Exact match on verdict + all 4 checks. No tolerance.
 ## tests
 
 ```bash
-python -m pytest tests/ -v
-# 29 passed
+npm test
+# 29 Python + 28 JavaScript
 ```
 
 ## tech

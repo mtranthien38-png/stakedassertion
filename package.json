@@ -1,0 +1,13 @@
+{
+  "name": "stakedassertion",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:py": "python -m pytest tests/ -v",
+    "test:js": "mocha tests/*.test.js --timeout 5000",
+    "test": "npm run test:py && npm run test:js"
+  },
+  "devDependencies": {
+    "mocha": "^10.0.0"
+  }
+}
