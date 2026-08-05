@@ -1,6 +1,4 @@
-# stakedassertion
-
-Stake GEN to make on-chain assertions. Get slashed if wrong.
+# stakedassertion Stake GEN to make on-chain assertions. Get slashed if wrong.
 
 ## contract
 
